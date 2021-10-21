@@ -27,10 +27,10 @@ $params = array(
 );
 
 // Gather parameters from URL
-if ( !empty($_GET['category']) ) {
-	$params['cmtitle'] = $_GET['category'];
-} else if ( !empty($_GET['cmcategory']) ) {
-	$params['cmtitle'] = $_GET['cmcategory'];
+if ( isset($_GET['category']) and $_GET['category'] != '') {
+	$params['category'] = $_GET['category'];
+} else if ( isset($_GET['cmcategory']) and $_GET['cmcategory'] != '') {
+	$params['category'] = $_GET['cmcategory'];
 }
 
 if ( !empty($_GET['site']) ) {
@@ -39,9 +39,9 @@ if ( !empty($_GET['site']) ) {
 	$params['baseURL'] = $_GET['server']; 
 }
 
-if ( !empty($_GET['namespace']) ) {
+if ( isset($_GET['namespace']) and $_GET['namespace'] != '' ) {
 	$params['query']['cmnamespace'] = $_GET['namespace'];
-} else if ( !empty($_GET['cmnamespace']) ) {
+} else if ( isset($_GET['cmnamespace']) and $_GET['cmnamespace'] != '' ) {
 	$params['query']['cmnamespace'] = $_GET['cmnamespace'];
 }
 
@@ -51,23 +51,39 @@ if ( !empty($_GET['type']) ) {
 	$params['query']['cmtype'] = $_GET['cmtype'];
 }
 
-//Do some data validation
-if ( isset($params['cmtitle']) ) {
-	$params['category'] = rawurlencode(preg_replace('/(\s|%20)/', '_', $params['cmtitle']));
+if ( isset($_SERVER['HTTP_REFERER']) ) {
+	$referer = '. Referer: '.$_SERVER['HTTP_REFERER'];
+} else {
+	$referer = '';
 }
 
-if (!isset($params['baseURL']) or !preg_match("/^[a-z\-]*\.?(mediawiki|toolforge|wik(i(books|data|[mp]edia|news|quote|source|versity|voyage)|tionary)).org/i", $params['baseURL']) ) {
-	if (isset($params['baseURL'])) {error_log("Invalid URL: {$params['baseURL']}");}
+//Do some data validation and normalization
+if ( isset($params['category']) ) {
+	$params['category'] = preg_replace('/^Category:/i','',$params['category']);
+	$params['query']['cmtitle'] = "Category:{$params['category']}";
+	$params['category'] = rawurlencode(preg_replace('/(\s|%20)/', '_', $params['category']));
+}
+
+if ( !isset($params['baseURL']) or !preg_match("/^[a-z\-]*\.?(mediawiki|toolforge|wik(i(books|data|[mp]edia|news|quote|source|versity|voyage)|tionary)).org$/i", $params['baseURL']) ) {
+	if (isset($params['baseURL'])) {error_log("Invalid URL: {$params['baseURL']}$referer");}
 	$params['baseURL'] = 'en.wikipedia.org';
 }
 
-if (isset($params['query']['cmnamespace']) and !preg_match("/^[\d\|\!:]*$/", urldecode($params['query']['cmnamespace'])) ) {
-	error_log("Invalid namespace: {$params['query']['cmnamespace']}");
-	unset($params['query']['cmnamespace']);
+if ( isset($params['query']['cmnamespace']) ) {
+	if ( !preg_match("/^[\d\|\!:;,]*$/", urldecode($params['query']['cmnamespace'])) ) {
+		error_log("Invalid namespace: {$params['query']['cmnamespace']}$referer");
+		unset($params['query']['cmnamespace']);
+	} else {
+		$params['query']['cmnamespace'] = str_replace(
+			array(',', ';', ':', '!', '/'),
+			'|',
+			$params['query']['cmnamespace']
+		);
+	}
 }
 
-if (isset($params['query']['cmtype']) and !preg_match("/^(page|subcat|file)[\d\|\!:]?(page|subcat|file)?[\d\|\!:]?(page|subcat|file)?$/", urldecode($params['query']['cmtype'])) ) {
-	error_log("Invalid type: {$params['query']['cmtype']}");
+if ( isset($params['query']['cmtype']) and !preg_match("/^(page|subcat|file)[\d\|\!:]?(page|subcat|file)?[\d\|\!:]?(page|subcat|file)?$/", urldecode($params['query']['cmtype'])) ) {
+	error_log("Invalid type: {$params['query']['cmtype']}$referer");
 	unset($params['query']['cmtype']);
 }
 
@@ -76,23 +92,11 @@ if (isset($params['query']['cmtype']) and !preg_match("/^(page|subcat|file)[\d\|
 if ( empty($params['category']) ) { // No category specified
 	buildPage($params);
 } else { // Category was specified
-	// Normalize parameters
-	$params['category'] = preg_replace('/^Category:/i','',$params['category']);
-	$params['query']['cmtitle'] = "Category:{$params['cmtitle']}";
-
-	if ( !empty($params['query']['cmnamespace']) ) {
-		$params['query']['cmnamespace'] = str_replace(
-			array(',', ';', '!', '/'),
-			'|',
-			$params['query']['cmnamespace']
-		);
-	}
-
 	// Check for cached list
 	$redisKey = implode(
 		array(
 			$redisKey,
-			"https://{$params['baseURL']}/wiki/Category:{$params['cmtitle']}",
+			"https://{$params['baseURL']}/wiki/{$params['query']['cmtitle']}",
 			$params['query']['cmnamespace'] ?? null,
 			$params['query']['cmtype'] ?? null
 		), ':'
@@ -100,7 +104,7 @@ if ( empty($params['category']) ) { // No category specified
 
 	$cache = getCache($redisKey);
 
-	if( $cache and $cache['data'] and $cache['timestamp'] and ( (time() - $cache['timestamp']) < 600) and !isset($_GET['purge']) ) {
+	if( $cache and $cache['data'] and $cache['timestamp'] and ( (time() - $cache['timestamp']) < 600) and empty($_GET['purge']) ) {
 		$memberList = json_decode( $cache['data'] );
 	} else {
 		$memberList = getMembers($params);
@@ -126,7 +130,7 @@ if ( empty($params['category']) ) { // No category specified
 			$targetURL = 'https://' . $params['baseURL'] . '/wiki/' . $memberList[array_rand($memberList)];
 		}
 
-		if (isset($_GET['debug'])) {
+		if ( !empty($_GET['debug']) ) {
 			echo('Cache age: ' . (time() - $cache['timestamp']) . 's. ');
 			echo("Items in category {$params['category']}: " . sizeof($memberList) . '. ');
 			echo('<a href="README.html">View documentation</a>.<br>');
@@ -141,7 +145,7 @@ if ( empty($params['category']) ) { // No category specified
 				'format' => 'json',
 				'action' => 'query',
 				'prop' => '',
-				'titles' => "Category:{$params['cmtitle']}"
+				'titles' => $params['query']['cmtitle']
 			);
 			$queryURL = 'https://' . $params['baseURL'] . '/w/api.php?' . http_build_query($query);
 			$jsonFile = @file_get_contents( $queryURL );
@@ -168,10 +172,9 @@ if ( empty($params['category']) ) { // No category specified
 		
 		$params['categoryName'] = htmlspecialchars(urldecode($params['categoryName']));
 		
-		if (isset($_GET['debug'])) {
+		if ( !empty($_GET['debug']) ) {
 			echo("Query URL: $queryURL<br>");
 			echo("JSON file: $jsonFile<br>");
-			echo('<a href="README.html">View documentation</a>.<br>');
 		}
 		
 		buildPage($params);
@@ -199,6 +202,10 @@ function getMembers($params, $cont = false) {
 		}
 		if ( isset($data) && isset($data['continue']) ) {
 			$memberList = array_merge( $memberList, getMembers($params, $data['continue']) );
+		}
+		if ( !empty($_GET['debug']) ) {
+			echo("Query URL: $queryURL<br>");
+			echo("JSON file: $jsonFile<br>");
 		}
 		return $memberList;
 	} else { // API call failed
@@ -344,7 +351,7 @@ exit();
 /*
 		The MIT License (MIT)
 
-		Copyright (c) 2021 Ahecht (https://en.wikipedia.org/wiki/User:Ahecht)
+		Copyright (c) 2020-2021 Ahecht (https://en.wikipedia.org/wiki/User:Ahecht)
 
 		Permission is hereby granted, free of charge, to any person
 		obtaining a copy of this software and associated documentation
