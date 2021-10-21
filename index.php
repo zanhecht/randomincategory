@@ -51,11 +51,12 @@ if ( !empty($_GET['type']) ) {
 	$params['query']['cmtype'] = $_GET['cmtype'];
 }
 
-if ( isset($_SERVER['HTTP_REFERER']) ) {
-	$referer = '. Referer: '.$_SERVER['HTTP_REFERER'];
-} else {
-	$referer = '';
+if ( isset($_GET['returntype']) and ($_GET['returntype'] == 'article') ) {
+	$params['returntype'] = 'subject';
+} else if ( isset($_GET['returntype']) and (($_GET['returntype'] == 'subject') or ($_GET['returntype'] == 'talk')) ) {
+	$params['returntype'] = $_GET['returntype'];
 }
+
 
 //Do some data validation and normalization
 if ( isset($params['category']) ) {
@@ -65,13 +66,13 @@ if ( isset($params['category']) ) {
 }
 
 if ( !isset($params['baseURL']) or !preg_match("/^[a-z\-]*\.?(mediawiki|toolforge|wik(i(books|data|[mp]edia|news|quote|source|versity|voyage)|tionary)).org$/i", $params['baseURL']) ) {
-	if (isset($params['baseURL'])) {error_log("Invalid URL: {$params['baseURL']}$referer");}
+	if (isset($params['baseURL'])) {error_log("Invalid URL: {$params['baseURL']}");}
 	$params['baseURL'] = 'en.wikipedia.org';
 }
 
 if ( isset($params['query']['cmnamespace']) ) {
 	if ( !preg_match("/^[\d\|\!:;,]*$/", urldecode($params['query']['cmnamespace'])) ) {
-		error_log("Invalid namespace: {$params['query']['cmnamespace']}$referer");
+		error_log("Invalid namespace: {$params['query']['cmnamespace']}");
 		unset($params['query']['cmnamespace']);
 	} else {
 		$params['query']['cmnamespace'] = str_replace(
@@ -83,7 +84,7 @@ if ( isset($params['query']['cmnamespace']) ) {
 }
 
 if ( isset($params['query']['cmtype']) and !preg_match("/^(page|subcat|file)[\d\|\!:]?(page|subcat|file)?[\d\|\!:]?(page|subcat|file)?$/", urldecode($params['query']['cmtype'])) ) {
-	error_log("Invalid type: {$params['query']['cmtype']}$referer");
+	error_log("Invalid type: {$params['query']['cmtype']}");
 	unset($params['query']['cmtype']);
 }
 
@@ -119,17 +120,23 @@ if ( empty($params['category']) ) { // No category specified
 		// Get URL parameters to pass on
 		$urlVars = array();
 		foreach($_GET as $getKey => $getValue) {
-			if (!in_array($getKey, array( 'site', 'server', 'category', 'cmcategory', 'namespace', 'cmnamespace', 'type', 'cmtype', 'purge', 'debug' ))) {
+			if (!in_array($getKey, array( 'site', 'server', 'category', 'cmcategory', 'namespace', 'cmnamespace', 'type', 'cmtype', 'purge', 'debug', 'returntype' ))) {
 				$urlVars[$getKey] = urlencode($getValue);
 			}
 		}
 		
-		if ( sizeof($urlVars) ) {
-			$targetURL = 'https://' . $params['baseURL'] . '/w/index.php?title=' . $memberList[array_rand($memberList)] . '&' . http_build_query($urlVars);
-		} else {
-			$targetURL = 'https://' . $params['baseURL'] . '/wiki/' . $memberList[array_rand($memberList)];
+		$targetPage = $memberList[array_rand($memberList)];
+		
+		if ( isset($params['returntype']) ) {
+			$targetPage = getAssociatedPage($params, $targetPage);
 		}
 
+		if ( sizeof($urlVars) ) {
+			$targetURL = 'https://' . $params['baseURL'] . '/w/index.php?title=' . $targetPage . '&' . http_build_query($urlVars);
+		} else {
+			$targetURL = 'https://' . $params['baseURL'] . '/wiki/' . $targetPage;
+		}
+		
 		if ( !empty($_GET['debug']) ) {
 			echo('Cache age: ' . (time() - $cache['timestamp']) . 's. ');
 			echo("Items in category {$params['category']}: " . sizeof($memberList) . '. ');
@@ -209,6 +216,7 @@ function getMembers($params, $cont = false) {
 		}
 		return $memberList;
 	} else { // API call failed
+		error_log("Error fetching $queryURL.");
 		$category = null;
 		if ( !empty($_GET['category']) ) {
 			$params['category'] = rawurlencode(preg_replace('/(\s|%20)/', '_', $_GET['category']));
@@ -224,6 +232,39 @@ function getMembers($params, $cont = false) {
 		}
 		return FALSE;
 	}
+}
+
+function getAssociatedPage($params, $title) {
+	$query = array(
+		'action' => 'query',
+		'format' => 'json',
+		'prop' => 'info',
+		'titles' => $title,
+		'formatversion' => '2',
+		'inprop' => 'subjectid|associatedpage|talkid'
+	);
+	
+	$queryURL = 'https://' . $params['baseURL'] . '/w/api.php?' . http_build_query($query);
+	$jsonFile = @file_get_contents( $queryURL );
+	
+	if ($jsonFile) { // API call executed successfully
+		$data = json_decode($jsonFile, TRUE);
+		if ( isset($data) && isset($data['query']) && isset($data['query']['pages']) && isset($data['query']['pages'][0]) && isset($data['query']['pages'][0]['associatedpage']) ) {
+			$item = $data['query']['pages'][0];
+			if ( (($params['returntype'] == 'talk') && isset($item['talkid'])) 
+				|| (($params['returntype'] == 'subject') && isset($item['subjectid'])) )
+			{
+				return $item['associatedpage'];
+			}
+		}
+	} else {
+		error_log("Error fetching $queryURL.");
+		if ( !empty($_GET['debug']) ) {
+			echo("Error fetching $queryURL.");
+		}
+	}
+	
+	return $title;
 }
 
 function getCache($key) {
