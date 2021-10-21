@@ -338,6 +338,7 @@ function buildPage($params) {
 	}
 	$cmnamespace = isset($params['query']['cmnamespace']) ? $params['query']['cmnamespace'] : '';
 	$cmtype= isset($params['query']['cmtype']) ? $params['query']['cmtype'] : '';
+	$returntype= isset($params['query']['returntype']) ? $params['query']['returntype'] : '';
 	echo(
 '			<div style="margin-top: 12px;display: none;" id="expandedOptions">
 				<div style="float: left; padding-right: 8px;">
@@ -346,7 +347,7 @@ function buildPage($params) {
 							Server:
 						</label>
 					</span>
-					<input type="text" name="server" id="server-input" value="'.$params['baseURL'].'" style="padding: 6px 8px;border: 1px solid #a2a9b1;border-radius: 2px;width: 320px;">
+					<input type="text" name="server" id="server-input" value="'.$params['baseURL'].'" style="padding: 6px 8px;border: 1px solid #a2a9b1;border-radius: 2px;width: 155px;">
 				</div>
 				<div style="float: left;padding-right: 8px;padding-left: 8px;">
 					<span style="display: block;padding-bottom: 4px;">
@@ -356,7 +357,7 @@ function buildPage($params) {
 					</span>
 					<input type="text" name="cmnamespace" id="cmnamespace-input" value="'.$cmnamespace.'" style="padding: 6px 8px;border: 1px solid #a2a9b1;border-radius: 2px;width: 144px;">
 				</div>
-				<div style="float: left;padding-left: 8px;">
+				<div style="float: left;padding-right: 8px;padding-left: 8px;">
 					<span style="display: block;padding-bottom: 4px;">
 						<label for="cmtype-input">
 							Type:
@@ -373,9 +374,23 @@ function buildPage($params) {
 						<option value="file|page|subcat">File, page, or category</option>
 					</select>
 				</div>
+				<div style="float: left;padding-left: 8px;">
+					<span style="display: block;padding-bottom: 4px;">
+						<label for="cmtype-input">
+							Return Type:
+						</label>
+					</span>
+					<select name="returntype" id="cmtype-input" style="padding: 5px 8px;border: 1px solid #a2a9b1;border-radius: 2px;width: 144px;">
+						<option value="'.$returntype.'" selected>'.$returntype.'</option>
+						<option value="">Any</option>
+						<option value="subject">Subject/Article</option>
+						<option value="talk">Talk</option>
+					</select>
+				</div>
+
 				<div style="clear: both;">
 					<div style="padding-top: 12px;padding-bottom: 4px;display: block;">URL:</div>
-					<div style="display: block;padding: 5px 8px;border: 1px solid #a2a9b1;border-radius: 2px;width: 626px;overflow-wrap: break-word;"><a id="outputURL"></a></div>
+					<div style="display: block;padding: 5px 8px;border: 1px solid #a2a9b1;border-radius: 2px;width: 622px;overflow-wrap: break-word;"><a id="outputURL"></a></div>
 				</div>
 			</div>
 			<input type="submit" value="Go" style="margin-top: 12px;background-color: #36c;border: 1px solid #36c;border-radius: 2px;padding: 6px 12px;color: #fff;font-weight: 700;">
