@@ -1,4 +1,5 @@
 <?php
+ini_set ("memory_limit", "256M");
 
 // Random In Category Tool
 // -----------------------
@@ -14,8 +15,6 @@
 //url.rewrite-if-not-file += ( "^/([^\?]*)$" => "/index.php?category=$1" )
 
 // Set defaults
-$redisKey = @file_get_contents('../redis.key') ?: 'G6YfmVEhxQdrFLEBFZEXxAppN0jyoYoC';
-
 $params = array(
 	'query' => array(
 		'format' => 'json',
@@ -25,6 +24,18 @@ $params = array(
 		'cmlimit' => 'max'
 	)
 );
+
+// Set up caching
+$opts = array(
+	'http'=>array(
+		'method'=>"GET",
+		'protocol_version'=>'1.1'
+	)
+);
+
+$context = stream_context_create($opts);
+
+$redisKey = @file_get_contents('../redis.key', false, $context) ?: 'G6YfmVEhxQdrFLEBFZEXxAppN0jyoYoC';
 
 // Gather parameters from URL
 if ( isset($_GET['category']) and $_GET['category'] != '') {
@@ -155,7 +166,7 @@ if ( empty($params['category']) ) { // No category specified
 				'titles' => $params['query']['cmtitle']
 			);
 			$queryURL = 'https://' . $params['baseURL'] . '/w/api.php?' . http_build_query($query);
-			$jsonFile = @file_get_contents( $queryURL );
+			$jsonFile = @file_get_contents( $queryURL, false, $context );
 			$data = json_decode($jsonFile, TRUE);
 		} else { // server isn't valid
 			$queryURL = '';
@@ -189,6 +200,15 @@ if ( empty($params['category']) ) { // No category specified
 }
 
 function getMembers($params, $cont = false) {
+	$opts = array(
+		'http'=>array(
+			'method'=>"GET",
+			'protocol_version'=>'1.1'
+		)
+	);
+
+	$context = stream_context_create($opts);
+
 	$memberList = array();
 	
 	if ($cont) {
@@ -196,7 +216,7 @@ function getMembers($params, $cont = false) {
 	}
 	
 	$queryURL = 'https://' . $params['baseURL'] . '/w/api.php?' . http_build_query($params['query']);
-	$jsonFile = @file_get_contents( $queryURL );
+	$jsonFile = @file_get_contents( $queryURL, false, $context );
 	
 	if ($jsonFile) { // API call executed successfully
 		$data = json_decode($jsonFile, TRUE);
@@ -217,16 +237,17 @@ function getMembers($params, $cont = false) {
 		return $memberList;
 	} else { // API call failed
 		error_log("Error fetching $queryURL.");
-		$category = null;
+		$params['category'] = null;
 		if ( !empty($_GET['category']) ) {
 			$params['category'] = rawurlencode(preg_replace('/(\s|%20)/', '_', $_GET['category']));
 		} else if ( !empty($_GET['cmcategory']) ) {
 			$params['category'] = rawurlencode(preg_replace('/(\s|%20)/', '_', $_GET['cmcategory']));
 		} 
-		$targetURL = "https://{$params['baseURL']}/wiki/Special:RandomInCategory/$category";
+		
+		$targetURL = "https://{$params['baseURL']}/wiki/Special:RandomInCategory/{$params['category']}";
 		if ( !empty($_GET['debug']) ) {
-			echo("Error fetching $queryURL. <a href=\"README.html\">View documentation</a>.<br>");
-			echo("Location: $targetURL<br>");
+			echo("Error fetching <a href=\"$queryURL\">$queryURL</a>. <a href=\"README.html\">View documentation</a>.<br>");
+			echo("Location: <a href=\"$targetURL\">$targetURL</a><br>");
 		} else {
 			header("Location: $targetURL");
 		}
@@ -235,6 +256,15 @@ function getMembers($params, $cont = false) {
 }
 
 function getAssociatedPage($params, $title) {
+	$opts = array(
+		'http'=>array(
+			'method'=>"GET",
+			'protocol_version'=>'1.1'
+		)
+	);
+
+	$context = stream_context_create($opts);
+	
 	$query = array(
 		'action' => 'query',
 		'format' => 'json',
@@ -245,7 +275,7 @@ function getAssociatedPage($params, $title) {
 	);
 	
 	$queryURL = 'https://' . $params['baseURL'] . '/w/api.php?' . http_build_query($query);
-	$jsonFile = @file_get_contents( $queryURL );
+	$jsonFile = @file_get_contents( $queryURL, false, $context );
 	
 	if ($jsonFile) { // API call executed successfully
 		$data = json_decode($jsonFile, TRUE);
