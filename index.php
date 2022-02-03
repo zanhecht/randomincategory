@@ -220,15 +220,19 @@ function getMembers($params, $cont = false) {
 	
 	if ($jsonFile) { // API call executed successfully
 		$data = json_decode($jsonFile, TRUE);
-		if ( isset($data) && isset($data['query']) && isset($data['query']['categorymembers']) ) {
-			foreach ($data['query']['categorymembers'] as $item) {
-				if ($item['title']) {
-					$memberList[] = $item['title'];
+		if ( isset($data) ) {
+			if ( isset($data['query']) && isset($data['query']['categorymembers']) ) {
+				foreach ($data['query']['categorymembers'] as $item) {
+					if ($item['title']) {
+						$memberList[] = $item['title'];
+					}
 				}
 			}
-		}
-		if ( isset($data) && isset($data['continue']) ) {
-			$memberList = array_merge( $memberList, getMembers($params, $data['continue']) );
+			if ( isset($data['continue']) ) {
+				$memberList = array_merge( $memberList, getMembers($params, $data['continue']) );
+			}
+		} else {
+			error_log("Error parsing response from $queryURL. Response size: " . strlen($jsonFile) . ". Member list length: " . count($memberList));
 		}
 		if ( !empty($_GET['debug']) ) {
 			echo("Query URL: $queryURL<br>");
