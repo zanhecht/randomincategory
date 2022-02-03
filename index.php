@@ -1,5 +1,6 @@
 <?php
-ini_set ("memory_limit", "256M");
+ini_set('memory_limit', '256M');
+ini_set('user_agent', 'RandomInCategory/20220203 (https://randomincategory.toolforge.org/; en:User:Ahecht) PHP/' . PHP_VERSION);
 
 // Random In Category Tool
 // -----------------------
@@ -22,19 +23,18 @@ $params = array(
 		'list' => 'categorymembers',
 		'cmprop' => 'title',
 		'cmlimit' => 'max'
+	),
+	'opts' => array(
+		'http'=>array(
+			'method'=>"GET",
+			'protocol_version'=>'1.1',
+			'header'=>['Connection: close']
+		)
 	)
 );
 
 // Set up caching
-$opts = array(
-	'http'=>array(
-		'method'=>"GET",
-		'protocol_version'=>'1.1'
-	)
-);
-
-$context = stream_context_create($opts);
-
+$context = stream_context_create($params['opts']);
 $redisKey = @file_get_contents('../redis.key', false, $context) ?: 'G6YfmVEhxQdrFLEBFZEXxAppN0jyoYoC';
 
 // Gather parameters from URL
@@ -200,15 +200,6 @@ if ( empty($params['category']) ) { // No category specified
 }
 
 function getMembers($params, $cont = false) {
-	$opts = array(
-		'http'=>array(
-			'method'=>"GET",
-			'protocol_version'=>'1.1'
-		)
-	);
-
-	$context = stream_context_create($opts);
-
 	$memberList = array();
 	
 	if ($cont) {
@@ -216,6 +207,7 @@ function getMembers($params, $cont = false) {
 	}
 	
 	$queryURL = 'https://' . $params['baseURL'] . '/w/api.php?' . http_build_query($params['query']);
+	$context = stream_context_create($params['opts']);
 	$jsonFile = @file_get_contents( $queryURL, false, $context );
 	
 	if ($jsonFile) { // API call executed successfully
@@ -260,15 +252,6 @@ function getMembers($params, $cont = false) {
 }
 
 function getAssociatedPage($params, $title) {
-	$opts = array(
-		'http'=>array(
-			'method'=>"GET",
-			'protocol_version'=>'1.1'
-		)
-	);
-
-	$context = stream_context_create($opts);
-	
 	$query = array(
 		'action' => 'query',
 		'format' => 'json',
@@ -279,6 +262,7 @@ function getAssociatedPage($params, $title) {
 	);
 	
 	$queryURL = 'https://' . $params['baseURL'] . '/w/api.php?' . http_build_query($query);
+	$context = stream_context_create($params['opts']);
 	$jsonFile = @file_get_contents( $queryURL, false, $context );
 	
 	if ($jsonFile) { // API call executed successfully
