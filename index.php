@@ -1,6 +1,6 @@
 <?php
 ini_set('memory_limit', '256M');
-ini_set('user_agent', 'RandomInCategory/20221215 (https://randomincategory.toolforge.org/; en:User:Ahecht) PHP/' . PHP_VERSION);
+ini_set('user_agent', 'RandomInCategory/20230215 (https://randomincategory.toolforge.org/; en:User:Ahecht) PHP/' . PHP_VERSION);
 
 // Random In Category Tool
 // -----------------------
@@ -167,6 +167,8 @@ if ( count($params['categories']) == 0 ) { // No categories specified
         if ( isset($params['returntype']) ) {
             $targetPage = getAssociatedPage($params, $targetPage);
         }
+		
+		$targetPage = wikiencode($targetPage);
 
         if ( sizeof($urlVars) ) {
             $targetURL = 'https://' . $params['baseURL'] . '/w/index.php?title=' . $targetPage . '&' . http_build_query($urlVars);
@@ -226,6 +228,17 @@ if ( count($params['categories']) == 0 ) { // No categories specified
         buildPage($params);
     }
 }
+
+function wikiencode($text) {
+	$output = "";
+	foreach (mb_str_split(str_replace(" ", "_", $text)) as $char) {
+		if (preg_match('/[^\p{L}\p{N}!$()*,.\/:;@~_\-]/u',$char)) {
+			$char = sprintf('%%%02X', ord($char));
+		}
+		$output .= $char;
+	}
+	return $output;
+}	
 
 function getMembers($params, $cont = false) {
     $memberList = array();
