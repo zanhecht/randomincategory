@@ -1,3 +1,4 @@
+
  <html>
 	<head>
 		<title>RandomInCategory Documentation</title>
@@ -42,10 +43,13 @@
 				Tool created by <a href=https://en.wikipedia.org/wiki/User:Ahecht>Ahecht</a>. Source available at <a href="/source.php">source.php</a>
 			</small>
 		<p>
-			The <a href="/RandomInCategory">RandomInCategory</a> tool is a replacement for <a href="https://en.wikipedia.org/wiki/Special:RandomInCategory">Special:RandomInCategory</a> that actually chooses a page randomly. Includes options for filtering results by namespace and type. To use, replace <code>[[Special:RandomInCategory/CATEGORY_NAME]]</code> with <code>[[toolforge:RandomInCategory/CATEGORY_NAME]]</code> or <code>[[toolforge:RandomInCategory/CATEGORY_NAME&OPTIONAL_PARAMETERS]]</code>. 
+			The <a href="/RandomInCategory">RandomInCategory</a> tool is a replacement for <a href="https://en.wikipedia.org/wiki/Special:RandomInCategory">Special:RandomInCategory</a> that actually chooses a page randomly. Includes options for filtering results by namespace and type. To use on a wiki, replace <code>[[Special:RandomInCategory/CATEGORY_NAME]]</code> with <code>[[toolforge:RandomInCategory/CATEGORY_NAME]]</code> or <code>[[toolforge:RandomInCategory/CATEGORY_NAME&OPTIONAL_PARAMETERS]]</code>. 
 		</p>
 		<p>
-			By default, the script assumes the category is from <a href="https://en.wikipedia.org/wiki/">en.wikipedia.org</a>. This can be overridden by adding the <code>server=</code> parameters to the url, e.g. <code>?server=commons.wikimedia.org</code>. Do not include "https://" in the site name. The server must at one of the following Wikimedia-owned domains:
+			Multiple categories can be specified by adding the <code>category2=</code>, <code>category3=</code>, etc. parameters to the url, e.g. <code>[[toolforge:RandomInCategory/Fish&category2=Whales&category3=Crabs&category4=Plankton]]</code>. 
+		</p>
+		<p>
+			By default, the script assumes the category is from <a href="https://en.wikipedia.org/wiki/">en.wikipedia.org</a>. This can be overridden by adding the <code>server=</code> parameters to the url, e.g. <code>&server=commons.wikimedia.org</code>. Do not include "https://" in the site name. The server must at one of the following Wikimedia-owned domains:
 		</p>
 		<ul>
 			<li>mediawiki.org</li>
@@ -62,13 +66,13 @@
 			<li>wiktionary.org</li>
 		</ul>
 		<p>
-			Results can be filtered by namespace and type by adding the <code>namespace=</code> and <code>type=</code> parameters to the url, e.g. <code>?namespace=2|118&type=page</code>. These parameters are documented as <code>cmnamespace</code> and <code>cmtype</code> at <a href="https://www.mediawiki.org/wiki/API:Categorymembers">https://www.mediawiki.org/wiki/API:Categorymembers</a>, but the "|" between namespaces can optionally be replaced with a ";" or "!" for compatibility with wikilinks.
+			Results can be filtered by namespace and type by adding the <code>namespace=</code> and <code>type=</code> parameters to the url, e.g. <code>&namespace=2|118&type=page</code>. These parameters are documented as <code>cmnamespace</code> and <code>cmtype</code> at <a href="https://www.mediawiki.org/wiki/API:Categorymembers">https://www.mediawiki.org/wiki/API:Categorymembers</a>, but the "|" between namespaces can optionally be replaced with a ";" or "!" for compatibility with wikilinks.
 		</p>
 		<p>
 			For performance reasons, the list of items is cached for 10 minutes. To manually refresh the cache, set the <code>purge=</code> parameter to any value.
 		</p>
 		<p>
-			Set the <code>returntype=</code> parameter to <code>article</code> or <code>subject</code> to return the associated subject page if the randomly chosen page is a talk page. Similarly, <code>returntype=talk</code> will return the associated talk page if the randomly chosed page is a subject page. If the associated page does not exist, the original randomly chosed page will be returned.
+			Set the <code>returntype=</code> parameter to <code>article</code> or <code>subject</code> to return the associated subject page if the randomly chosen page is a talk page. Similarly, <code>returntype=talk</code> will return the associated talk page if the randomly chosen page is a subject page. If the associated page does not exist, the original randomly chosen page will be returned.
 		</p>
 		<p>
 			The script will return the URL of the article and other debugging data instead of actually performing the redirect if the <code>debug=</code> parameter is set to any value.
@@ -100,7 +104,7 @@
 		</p>
 		<p>
 			<small>
-				Copyright &copy; 2020-2021 <a href="https://en.wikipedia.org/wiki/User:Ahecht">Ahecht</a>
+				Copyright &copy; 2020-2022 <a href="https://en.wikipedia.org/wiki/User:Ahecht">Ahecht</a>
 			</small>
 		</p>
 		<p>
