@@ -233,7 +233,7 @@ function wikiencode($text) {
 	$output = "";
 	foreach (mb_str_split(str_replace(" ", "_", $text)) as $char) {
 		if (preg_match('/[^\p{L}\p{N}!$()*,.\/:;@~_\-]/u',$char)) {
-			$char = sprintf('%%%02X', ord($char));
+			$char = sprintf('%%%02X', mb_ord($char));
 		}
 		$output .= $char;
 	}
