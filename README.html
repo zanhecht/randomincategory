@@ -1,4 +1,3 @@
-
  <html>
 	<head>
 		<title>RandomInCategory Documentation</title>
@@ -69,7 +68,7 @@
 			Results can be filtered by namespace and type by adding the <code>namespace=</code> and <code>type=</code> parameters to the url, e.g. <code>&namespace=2|118&type=page</code>. These parameters are documented as <code>cmnamespace</code> and <code>cmtype</code> at <a href="https://www.mediawiki.org/wiki/API:Categorymembers">https://www.mediawiki.org/wiki/API:Categorymembers</a>, but the "|" between namespaces can optionally be replaced with a ";" or "!" for compatibility with wikilinks.
 		</p>
 		<p>
-			For performance reasons, the list of items is cached for 10 minutes. To manually refresh the cache, set the <code>purge=</code> parameter to any value.
+			For performance reasons, the list of items is cached for 10 minutes. To manually refresh the cache, set the <code>purge=</code> parameter to any value. Also, any categories with more than 100,000 pages will either redirect to <a href="https://en.wikipedia.org/wiki/Special:RandomInCategory">Special:RandomInCategory</a> or, if multiple categories were requested, return an error message.
 		</p>
 		<p>
 			Set the <code>returntype=</code> parameter to <code>article</code> or <code>subject</code> to return the associated subject page if the randomly chosen page is a talk page. Similarly, <code>returntype=talk</code> will return the associated talk page if the randomly chosen page is a subject page. If the associated page does not exist, the original randomly chosen page will be returned.
@@ -104,7 +103,7 @@
 		</p>
 		<p>
 			<small>
-				Copyright &copy; 2020-2022 <a href="https://en.wikipedia.org/wiki/User:Ahecht">Ahecht</a>
+				Copyright &copy; 2020-2024 <a href="https://en.wikipedia.org/wiki/User:Ahecht">Ahecht</a>
 			</small>
 		</p>
 		<p>
