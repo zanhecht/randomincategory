@@ -34,7 +34,9 @@ $params = array(
 		)
 	),
 	'category' => '',
-	'categories' => []
+	'categories' => [],
+	'pageLimit' => 100000,
+	'hugeCategory' => FALSE
 );
 
 // Set up caching
@@ -137,12 +139,33 @@ if ( count($params['categories']) == 0 ) { // No categories specified
 		if( $cache and $cache['data'] and $cache['timestamp'] and ( (time() - $cache['timestamp']) < 600) and empty($_GET['purge']) ) {
 			$memberList = array_merge( $memberList, json_decode( $cache['data'] ) );
 		} else {
-			$thisMemberList = getMembers($params);
+			// Check if category exists and is small enough
+			$query = array(
+				'format' => 'json',
+				'action' => 'query',
+				'prop' => 'categoryinfo',
+				'titles' => 'Category:' . $catName
+			);
+			$queryURL = 'https://' . $params['baseURL'] . '/w/api.php?' . http_build_query($query);
+			$jsonFile = @file_get_contents( $queryURL, false, $context );
+			$thisMemberList = FALSE;
+			if ($jsonFile and !empty($jsonFile)) { // API call executed successfully
+				$data = json_decode($jsonFile, TRUE);
+				if ( isset($data) and isset($data['query']) and isset($data['query']['pages']) and !isset($data['query']['pages']['-1']) ) {
+					// category and site exist
+					$params['pageCount'][$catKey] = intval(reset($data['query']['pages'])['categoryinfo']['pages']);
+					if ($params['pageCount'][$catKey] <= $params['pageLimit']) {
+						$thisMemberList = getMembers($params);
+					} else {
+						$params['hugeCategory'] = reset($data['query']['pages'])['title'];
+					}
+				}
+			}
 			if ( $thisMemberList !== FALSE ) {
 				setCache( $redisKey, json_encode($thisMemberList) );
+				$memberList = array_merge( $memberList, $thisMemberList );
 			}
 			$cache['timestamp'] = time();
-			$memberList = array_merge( $memberList, $thisMemberList );
 		}
 	}
 	// Remove trailing '|' from list of categories
@@ -151,81 +174,94 @@ if ( count($params['categories']) == 0 ) { // No categories specified
 	$memberList = array_unique($memberList);
 
 	// Output URL or redirect
-	if ( !empty($memberList) ) { //List of pages found
-		// Get URL parameters to pass on
-		$urlVars = array();
-		foreach($_GET as $getKey => $getValue) {
-			if (!in_array($getKey, array( 'site', 'server', 'namespace', 'cmnamespace', 'type', 'cmtype', 'purge', 'debug', 'returntype' ))) {
-				if ( ( strtolower( substr($getKey, 0, 8) ) != "category" ) and ( strtolower( substr($getKey, 0, 10) ) != "cmcategory" ) ) {
-					$urlVars[$getKey] = urlencode($getValue);
+	if ($params['hugeCategory'] == FALSE) {
+		if ( !empty($memberList) ) { //List of pages found and none are huge
+			// Get URL parameters to pass on
+			$urlVars = array();
+			foreach($_GET as $getKey => $getValue) {
+				if (!in_array($getKey, array( 'site', 'server', 'namespace', 'cmnamespace', 'type', 'cmtype', 'purge', 'debug', 'returntype' ))) {
+					if ( ( strtolower( substr($getKey, 0, 8) ) != "category" ) and ( strtolower( substr($getKey, 0, 10) ) != "cmcategory" ) ) {
+						$urlVars[$getKey] = urlencode($getValue);
+					}
 				}
 			}
-		}
-		
-		$targetPage = $memberList[array_rand($memberList)];
-		
-		if ( isset($params['returntype']) ) {
-			$targetPage = getAssociatedPage($params, $targetPage);
-		}
-		
-		$targetPage = wikiencode($targetPage);
+			
+			$targetPage = $memberList[array_rand($memberList)];
+			
+			if ( isset($params['returntype']) ) {
+				$targetPage = getAssociatedPage($params, $targetPage);
+			}
+			
+			$targetPage = wikiencode($targetPage);
 
-		if ( sizeof($urlVars) ) {
-			$targetURL = 'https://' . $params['baseURL'] . '/w/index.php?title=' . $targetPage . '&' . http_build_query($urlVars);
-		} else {
-			$targetURL = 'https://' . $params['baseURL'] . '/wiki/' . $targetPage;
-		}
-		
-		if ( !empty($_GET['debug']) ) {
-			echo('Cache age: ' . (time() - $cache['timestamp']) . 's. ');
-			echo("Items in category {$params['category']}: " . sizeof($memberList) . '. ');
-			echo('<a href="README.html">View documentation</a>.<br>');
-			echo("Location: $targetURL<br>");
-		} else {
-			header("Location: $targetURL");
-		}
-	} else { // No page to redirect to
-		foreach($params['categories'] as $catKey => $catName) { //Find information on each category
-			if ( $memberList !== FALSE ) { // server is valid
-				// Check if category exists
-				$query = array(
-					'format' => 'json',
-					'action' => 'query',
-					'prop' => '',
-					'titles' => 'Category:' . $catName
-				);
-				$queryURL = 'https://' . $params['baseURL'] . '/w/api.php?' . http_build_query($query);
-				$jsonFile = @file_get_contents( $queryURL, false, $context );
-				$data = json_decode($jsonFile, TRUE);
-			} else { // server isn't valid
-				$queryURL = '';
-				$jsonFile = FALSE;
+			if ( sizeof($urlVars) ) {
+				$targetURL = 'https://' . $params['baseURL'] . '/w/index.php?title=' . $targetPage . '&' . http_build_query($urlVars);
+			} else {
+				$targetURL = 'https://' . $params['baseURL'] . '/wiki/' . $targetPage;
 			}
-			
-			if ( !empty($jsonFile) and isset($data) and isset($data['query']) and isset($data['query']['pages']) and !isset($data['query']['pages']['-1']) ) {
-				// category and site exist
-				$params['categoryName'][$catKey] = str_replace('Category:', '', reset($data['query']['pages'])['title']);
-				$params['categoryColor'][$catKey] = '#0645ad';
-				$params['siteColor'] = '#0645ad';
-			} else { // Invalid API response or category name not found
-				$params['categoryName'][$catKey] = str_replace('_',' ',$catName);
-				$params['categoryColor'][$catKey] = '#ba0000';
-				if ( !empty($jsonFile) ) { // API returned a valid response, site exists
-					$params['siteColor'] = '#0645ad';
-				} else { // API did not return a valid response, assuming site doesn't exist
-					$params['siteColor'] = '#ba0000';
-				}
-			}
-			
-			$params['categoryName'][$catKey] = htmlspecialchars(urldecode($params['categoryName'][$catKey]));
 			
 			if ( !empty($_GET['debug']) ) {
-				echo("Query URL: $queryURL<br>");
-				echo("JSON file: $jsonFile<br><br>");
+				echo('Cache age: ' . (time() - $cache['timestamp']) . 's. ');
+				echo("Items in categories {$params['category']}: " . sizeof($memberList) . '. ');
+				echo('<a href="README.html">View documentation</a>.<br>');
+				echo("Location: $targetURL<br>");
+			} else {
+				header("Location: $targetURL");
 			}
+		} else { // No page to redirect to
+			foreach($params['categories'] as $catKey => $catName) { //Find information on each category
+				if ( $memberList !== FALSE ) { // server is valid
+					// Check if category exists
+					$query = array(
+						'format' => 'json',
+						'action' => 'query',
+						'prop' => '',
+						'titles' => 'Category:' . $catName
+					);
+					$queryURL = 'https://' . $params['baseURL'] . '/w/api.php?' . http_build_query($query);
+					$jsonFile = @file_get_contents( $queryURL, false, $context );
+					$data = json_decode($jsonFile, TRUE);
+				} else { // server isn't valid
+					$queryURL = '';
+					$jsonFile = FALSE;
+				}
+				
+				if ( !empty($jsonFile) and isset($data) and isset($data['query']) and isset($data['query']['pages']) and !isset($data['query']['pages']['-1']) ) {
+					// category and site exist
+					$params['categoryName'][$catKey] = str_replace('Category:', '', reset($data['query']['pages'])['title']);
+					$params['categoryColor'][$catKey] = '#0645ad';
+					$params['siteColor'] = '#0645ad';
+				} else { // Invalid API response or category name not found
+					$params['categoryName'][$catKey] = str_replace('_',' ',$catName);
+					$params['categoryColor'][$catKey] = '#ba0000';
+					if ( !empty($jsonFile) ) { // API returned a valid response, site exists
+						$params['siteColor'] = '#0645ad';
+					} else { // API did not return a valid response, assuming site doesn't exist
+						$params['siteColor'] = '#ba0000';
+					}
+				}
+				
+				$params['categoryName'][$catKey] = htmlspecialchars(urldecode($params['categoryName'][$catKey]));
+				
+				if ( !empty($_GET['debug']) ) {
+					echo("Query URL: $queryURL<br>");
+					echo("JSON file: $jsonFile<br><br>");
+				}
+			}
+			
+			buildPage($params);
 		}
-		
-		buildPage($params);
+	} else {
+		$startURL = "https://{$params['baseURL']}/wiki/";
+		$encodedCat = rawurlencode(preg_replace('/(\s|%20)/', '_', $params['hugeCategory']));
+		if ( !empty($_GET['debug']) or (count($params['categories']) > 1) ) {
+			echo('<html><head><link rel="shortcut icon" type="image/x-icon" href="favicon.ico" /></head><body style="font: 14px sans-serif;color: #202122;">');
+			echo("<a href='{$startURL}{$encodedCat}'>{$params['hugeCategory']}</a> is too large for this tool. ");
+			echo("Try using <a href='{$startURL}Special:RandomInCategory/{$encodedCat}'>Special:RandomInCategory/{$params['hugeCategory']}</a> instead.");
+			echo('</body></html>');
+		} else {
+			header("Location: {$startURL}Special:RandomInCategory/{$encodedCat}");
+		}
 	}
 }
 
@@ -285,6 +321,8 @@ function getMembers($params, $cont = false) {
 		if ( !empty($_GET['debug']) ) {
 			echo("Error fetching <a href=\"$queryURL\">$queryURL</a>. <a href=\"README.html\">View documentation</a>.<br>");
 			echo("Location: <a href=\"$targetURL\">$targetURL</a><br>");
+		} else if (count($params['categories']) > 1) {
+			echo("Error fetching data for {$params['category']}. Try using <a href=\"$targetURL\">$targetURL</a> or <a href=\"README.html\">view documentation</a>.<br>");
 		} else {
 			header("Location: $targetURL");
 		}
