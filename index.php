@@ -61,7 +61,7 @@ if ( isset($_GET['returntype']) ) {
 
 //Check that we're only querying wikimedia wikis
 if ( !isset($params['baseURL']) or !preg_match("/^[a-z\-]*\.?(mediawiki|toolforge|wik(i(books|data|[mp]edia|news|quote|source|versity|voyage)|tionary)).org$/i", $params['baseURL']) ) {
-	//if (isset($params['baseURL'])) {error_log("Invalid URL: {$params['baseURL']}");}
+	//if (isset($params['baseURL'])) {error_log("Invalid URL: {$params['baseURL']}. From ".json_encode($_GET));}
 	$params['baseURL'] = 'en.wikipedia.org';
 }
 
@@ -70,7 +70,7 @@ if ( isset($params['query']['cmnamespace']) ) {
 		if ( strtolower(urldecode($params['query']['cmnamespace'])) == 'article' ) {
 			$params['query']['cmnamespace'] = '0';
 		} else {
-			error_log("Invalid namespace: {$params['query']['cmnamespace']}");
+			error_log("Invalid namespace: {$params['query']['cmnamespace']}. From ".json_encode($_GET));
 			unset($params['query']['cmnamespace']);
 		}
 	} else {
@@ -83,7 +83,7 @@ if ( isset($params['query']['cmnamespace']) ) {
 }
 
 if ( isset($params['query']['cmtype']) and !preg_match("/^(page|subcat|file)[\d\|\!:]?(page|subcat|file)?[\d\|\!:]?(page|subcat|file)?$/", urldecode($params['query']['cmtype'])) ) {
-	error_log("Invalid type: {$params['query']['cmtype']}");
+	error_log("Invalid type: {$params['query']['cmtype']}. From ".json_encode($_GET));
 	unset($params['query']['cmtype']);
 }
 
