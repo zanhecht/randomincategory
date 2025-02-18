@@ -44,10 +44,12 @@ $context = stream_context_create($params['opts']);
 $redisBaseKey = @file_get_contents('../redis.key', false, $context) ?: 'G6YfmVEhxQdrFLEBFZEXxAppN0jyoYoC';
 
 // Gather parameters from URL
-foreach($_GET as $getKey => $getValue) {
+foreach ($_GET as $getKey => $getValue) {
 	if ( ( strtolower( substr($getKey, 0, 8) ) == "category" ) or ( strtolower( substr($getKey, 0, 10) ) == "cmcategory" ) ) {
-		if ( $getValue != '' ) {
-			$params['categories'][] = "Category:" . preg_replace('/^Category:/i','',$getValue);
+		foreach (explode('|', $getValue) as $expValue) {
+			if ( $expValue != '' ) {
+				$params['categories'][] = "Category:" . preg_replace('/^Category:/i','',$expValue);
+			}
 		}
 	}
 }
@@ -130,7 +132,7 @@ if ( count($params['categories']) == 0 ) { // No categories specified
 				'prop' => 'categoryinfo',
 				'titles' => $params['query']['cmtitle']
 			);
-			$queryURL = 'https://' . $params['baseURL'] . '/w/api.php?' . http_build_query($query);
+			$queryURL = 'https://' . $params['baseURL'] . '/w/api.php?' .  str_replace('%20', '_', http_build_query($params['query']));
 			$jsonFile = @file_get_contents( $queryURL, false, $context );
 			if ( !empty($_GET['debug']) ) {
 				echo("Query URL: $queryURL<br>");
