@@ -1,6 +1,6 @@
 <?php
 ini_set('memory_limit', '256M');
-ini_set('user_agent', 'RandomInCategory/20240810 (https://randomincategory.toolforge.org/; en:User:Ahecht) PHP/' . PHP_VERSION);
+ini_set('user_agent', 'RandomInCategory/20250218 (https://randomincategory.toolforge.org/; en:User:Ahecht) PHP/' . PHP_VERSION);
 
 // Random In Category Tool
 // -----------------------
