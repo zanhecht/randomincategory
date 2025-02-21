@@ -1,6 +1,7 @@
 <?php
 ini_set('memory_limit', '256M');
-ini_set('user_agent', 'RandomInCategory/20250218 (https://randomincategory.toolforge.org/; en:User:Ahecht) PHP/' . PHP_VERSION);
+$app_version = 'RandomInCategory/20250218';
+ini_set('user_agent', $app_version . ' (https://randomincategory.toolforge.org/; en:User:Ahecht) PHP/' . PHP_VERSION);
 
 // Random In Category Tool
 // -----------------------
@@ -36,12 +37,14 @@ $params = array(
 	'category' => '',
 	'categories' => [],
 	'pageLimit' => 100000,
-	'hugeCategory' => FALSE
+	'hugeCategory' => FALSE,
+	'appVersion' => $app_version
 );
 
 // Set up caching
 $context = stream_context_create($params['opts']);
-$redisBaseKey = @file_get_contents('../redis.key', false, $context) ?: 'G6YfmVEhxQdrFLEBFZEXxAppN0jyoYoC';
+$redisBaseKey = $params['appVersion'];
+$redisBaseKey .= @file_get_contents('../redis.key', false, $context) ?: 'G6YfmVEhxQdrFLEBFZEXxAppN0jyoYoC';
 
 // Gather parameters from URL
 foreach ($_GET as $getKey => $getValue) {
@@ -132,7 +135,7 @@ if ( count($params['categories']) == 0 ) { // No categories specified
 				'prop' => 'categoryinfo',
 				'titles' => $params['query']['cmtitle']
 			);
-			$queryURL = 'https://' . $params['baseURL'] . '/w/api.php?' .  str_replace('%20', '_', http_build_query($params['query']));
+			$queryURL = 'https://' . $params['baseURL'] . '/w/api.php?' . http_build_query($params['query']);
 			$jsonFile = @file_get_contents( $queryURL, false, $context );
 			if ( !empty($_GET['debug']) ) {
 				echo("Query URL: $queryURL<br>");
@@ -255,7 +258,8 @@ if ( count($params['categories']) == 0 ) { // No categories specified
 		$startURL = "https://{$params['baseURL']}/wiki/";
 		$encodedCat = rawurlencode(preg_replace('/(\s|%20)/', '_', $params['hugeCategory']));
 		if ( !empty($_GET['debug']) or (count($params['categories']) > 1) ) {
-			echo('<html><head><link rel="shortcut icon" type="image/x-icon" href="favicon.ico" /></head><body style="font: 14px sans-serif;color: #202122;">');
+			echo("<html><head><link rel='shortcut icon' type='image/x-icon' href='favicon.ico' /><meta name='application-name' content='{$params['appVersion']}' /></head>");
+			echo("<body style='font: 14px sans-serif;color: #202122;'>");
 			echo("<a href='{$startURL}{$encodedCat}'>{$params['hugeCategory']}</a> is too large for this tool. ");
 			echo("Try using <a href='{$startURL}Special:RandomInCategory/{$encodedCat}'>Special:RandomInCategory/{$params['hugeCategory']}</a> instead.");
 			echo('</body></html>');
@@ -386,21 +390,23 @@ function setCache($key, $value) {
 }
 
 function buildPage($params) {
-	echo(
-'<html>
-	<head>
-		<link rel="shortcut icon" type="image/x-icon" href="favicon.ico" />
-		<script src="https://tools-static.wmflabs.org/cdnjs/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-		<script>
+	$script = '<script>
 			function addCatRow(node, counter) {
 				$(node).after(\'<input type="text" name="category\' + (counter + 1) + \'" id="category-input\' + (counter + 1) + \'" placeholder="Category name" style="margin-top: 12px;padding: 6px 8px;border: 1px solid #a2a9b1;border-radius: 2px;width: 640px;"><a href="#" id="category-add-\' + (counter + 1) + \'" onClick="addCatRow(this, \' + (counter + 1) + \')"><svg style=\"width: 20px; height: 20px;vertical-align: middle;\"><title>add</title><path fill=\"#36c\" d=\"M11 9V4H9v5H4v2h5v5h2v-5h5V9z\"/></svg></a>\');
 				$("#category-add-" + counter).remove();
 			}
-		</script>
+		</script>';
+	echo(
+"<html>
+	<head>
+		<link rel='shortcut icon' type='image/x-icon' href='favicon.ico' />
+		<meta name='application-name' content='{$params['appVersion']}' />
+		<script src='https://tools-static.wmflabs.org/cdnjs/ajax/libs/jquery/3.6.0/jquery.min.js'></script>
+		{$script}
 	</head>
-	<body style="font: 14px sans-serif;color: #202122;">
-		<h1 style="font: 2em \'Linux Libertine\',\'Georgia\',\'Times\',serif;color: #000;line-height: 1.3;margin-bottom:7.2px;border-bottom: 1px solid #a2a9b1;display: block;">Random page in category</h1>
-		<div style="padding: 4px 0px;">'
+	<body style='font: 14px sans-serif;color: #202122;'>
+		<h1 style='font: 2em \"Linux Libertine\",\"Georgia\",\"Times\",serif;color: #000;line-height: 1.3;margin-bottom:7.2px;border-bottom: 1px solid #a2a9b1;display: block;'>Random page in category</h1>
+		<div style='padding: 4px 0px;'>"
 	);
 	
 	$catSuggest = 'placeholder="Category name"';
@@ -446,7 +452,7 @@ function buildPage($params) {
 	}
 	echo(
 "		</div>
-		<form oninput='document.getElementById(\"outputURL\").href = document.getElementById(\"outputURL\").innerHTML = window.location.href.split(/[?#]/)[0] + \"?\" + $(this).serialize();'>
+		<form oninput='document.getElementById(\"outputURL\").href = document.getElementById(\"outputURL\").innerHTML = window.location.href.split(/[?#]/)[0] + \"?\" + $(this).serialize().replaceAll(\"%20\",\"_\");'>
 			<div style='margin-top: 12px;'>
 				<span style='display: block;padding-bottom: 4px;'>
 					<label for='category-input'>
