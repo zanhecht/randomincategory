@@ -1,6 +1,7 @@
 <?php
 ini_set('memory_limit', '256M');
-ini_set('user_agent', 'RandomInCategory/20240810 (https://randomincategory.toolforge.org/; en:User:Ahecht) PHP/' . PHP_VERSION);
+$app_version = 'RandomInCategory/20250218';
+ini_set('user_agent', $app_version . ' (https://randomincategory.toolforge.org/; en:User:Ahecht) PHP/' . PHP_VERSION);
 
 // Random In Category Tool
 // -----------------------
@@ -37,18 +38,22 @@ $params = array(
 	'categories' => [],
 	'pageLimit' => 100000,
 	'hugeCategory' => FALSE,
-	'errorMsg' => ''
+	'errorMsg' => '',
+	'appVersion' => $app_version
 );
 
 // Set up caching
+$redisBaseKey = $params['appVersion'];
 $context = stream_context_create($params['opts']);
-$redisBaseKey = @file_get_contents('../redis.key', false, $context) ?: 'G6YfmVEhxQdrFLEBFZEXxAppN0jyoYoC';
+$redisBaseKey .= @file_get_contents('../redis.key', false, $context) ?: 'G6YfmVEhxQdrFLEBFZEXxAppN0jyoYoC';
 
 // Gather parameters from URL
 foreach($_GET as $getKey => $getValue) {
 	if ( ( strtolower( substr($getKey, 0, 8) ) == "category" ) or ( strtolower( substr($getKey, 0, 10) ) == "cmcategory" ) ) {
-		if ( $getValue != '' ) {
-			$params['categories'][] = "Category:" . preg_replace('/^Category:/i','',$getValue);
+		foreach (explode('|', $getValue) as $expValue) {
+			if ( $expValue != '' ) {
+				$params['categories'][] = "Category:" . preg_replace('/^Category:/i','',$expValue);
+			}
 		}
 	}
 }
@@ -59,6 +64,14 @@ $params['query']['cmnamespace'] = !empty($_GET['namespace']) ? $_GET['namespace'
 if ( isset($_GET['returntype']) ) {
 	$params['returntype'] = ($_GET['returntype'] == 'article' or $_GET['returntype'] == 'subject') ? 'subject' : ($_GET['returntype'] == 'talk' ? 'talk' : null);
 }
+
+$htmlTop = "<html><head>
+	<link rel='shortcut icon' type='image/x-icon' href='favicon.ico' />
+	<meta name='application-name' content='{$params['appVersion']}' />
+</head><body style='font: 14px sans-serif;color: #202122;'>
+";
+
+if ( !empty($_GET['debug']) ) { echo($htmlTop); }
 
 //Check that we're only querying wikimedia wikis
 if ( !isset($params['baseURL']) or $params['baseURL'] == '' ) {
@@ -79,7 +92,9 @@ if ( isset($params['query']['cmnamespace']) ) {
 	//remove anything that's not a number or separator
 	$params['query']['cmnamespace'] = preg_replace('/[^\|\d]/', '', $params['query']['cmnamespace']);
 	if ( !preg_match("/^\d+(\|\d+)*$/", $params['query']['cmnamespace']) ) { //invalid namespace format
-		error_log("Invalid namespace: {$params['query']['cmnamespace']}  ({$orig}). From ".json_encode($_GET));
+		$errorLog = "Invalid namespace: {$params['query']['cmnamespace']}  ({$orig}). From ".json_encode($_GET);
+		error_log($errorLog);
+		if ( !empty($_GET['debug']) ) { echo("<p>{$errorLog}</p>"); }
 		unset($params['query']['cmnamespace']);
 	}
 }
@@ -91,7 +106,9 @@ if ( isset($params['query']['cmtype']) ) {
 	//remove anything that's not a letter or separator
 	$params['query']['cmtype'] = preg_replace( '/[^a-z\|]/i', '', $params['query']['cmtype'] );
 	if ( !preg_match("/^(page|subcat|file)(\|(page|subcat|file))?(\|(page|subcat|file))?$/", $params['query']['cmtype']) ) {
-		error_log("Invalid type: {$params['query']['cmtype']} ({$orig}). From ".json_encode($_GET));
+		$errorLog = "Invalid type: {$params['query']['cmtype']} ({$orig}). From ".json_encode($_GET);
+		error_log($errorLog);
+		if ( !empty($_GET['debug']) ) { echo("<p>{$errorLog}</p>"); }
 		unset($params['query']['cmtype']);
 	}
 }
@@ -99,7 +116,7 @@ if ( isset($params['query']['cmtype']) ) {
 // Run API queries
 $numCats = count($params['categories']);
 if ( $numCats == 0 ) { // No categories specified 
-	if ( !empty($_GET['debug']) ) { echo("Category list empty.<br>"); }
+	if ( !empty($_GET['debug']) ) { echo("<p>Category list empty.</p>"); }
 	buildPage($params);
 	exit();
 } else { // Category was specified
@@ -113,7 +130,7 @@ if ( $numCats == 0 ) { // No categories specified
 		$catName = rawurlencode(preg_replace('/(\s|%20)/', '_', $catName));
 		$params['category'] = $params['category'].$catName.'|';
 		if ( !empty($_GET['debug']) ) {
-			echo("Category $catKey: $catName<br><br>");
+			echo("<p>Category $catKey: $catName</p>");
 		}
 		
 		// Check for cached list
@@ -144,8 +161,8 @@ if ( $numCats == 0 ) { // No categories specified
 			$queryURL = 'https://' . $params['baseURL'] . '/w/api.php?' . http_build_query($query);
 			$jsonFile = file_get_contents( $queryURL, false, $context );
 			if ( !empty($_GET['debug']) ) {
-				echo("Query URL: $queryURL<br>");
-				echo("JSON file: $jsonFile<br><br>");
+				echo("<p>Query URL: $queryURL<br>");
+				echo("JSON file: $jsonFile</p>");
 			}
 			$thisMemberList = FALSE;
 			if ($jsonFile and !empty($jsonFile)) { // API call executed successfully
@@ -155,7 +172,7 @@ if ( $numCats == 0 ) { // No categories specified
 					if ( isset($data['query']['pages']['-1']) or isset($firstPage['missing']) or !isset($firstPage['categoryinfo']) ) {
 						//Missing or not a category
 						if ( preg_match('/^category:/i', $params['query']['cmtitle']) ) {
-							if ( !empty($_GET['debug']) ) { echo("Let's try again without the prefix:<br>"); }
+							if ( !empty($_GET['debug']) ) { echo("<p>Let's try again without the prefix:</p>"); }
 							$params['categories'][$catKey] = preg_replace('/^category:/i','',$params['query']['cmtitle']);
 							key($params['categories']) ? prev($params['categories']) : end($params['categories']); //retry
 						}
@@ -210,10 +227,9 @@ if ( $numCats == 0 ) { // No categories specified
 			}
 			
 			if ( !empty($_GET['debug']) ) {
-				echo('Cache age: ' . (time() - $cache['timestamp']) . 's. ');
-				echo("Items in categories {$params['category']}: " . sizeof($memberList) . '. ');
-				echo('<a href="README.html">View documentation</a>.<br>');
-				echo("Location: $targetURL<br>");
+				echo('<p>Cache age: ' . (time() - $cache['timestamp']) . 's. ');
+				echo("Items in categories {$params['category']}: " . sizeof($memberList) . '.<br>');
+				echo("Location: $targetURL</p>");
 			} else {
 				header("Location: $targetURL");
 			}
@@ -253,8 +269,8 @@ if ( $numCats == 0 ) { // No categories specified
 				$params['categoryName'][$catKey] = htmlspecialchars(urldecode($params['categoryName'][$catKey]));
 				
 				if ( !empty($_GET['debug']) ) {
-					echo("Query URL: $queryURL<br>");
-					echo("JSON file: $jsonFile<br><br>");
+					echo("<p>Query URL: $queryURL<br>");
+					echo("JSON file: $jsonFile</p>");
 				}
 			}
 			
@@ -286,15 +302,16 @@ if ( $numCats == 0 ) { // No categories specified
 		$startURL = "https://{$params['baseURL']}/wiki/";
 		$encodedCat = rawurlencode(preg_replace('/(\s|%20)/', '_', $params['hugeCategory']));
 		if ( !empty($_GET['debug']) or ($numCats > 1) ) {
-			echo('<html><head><link rel="shortcut icon" type="image/x-icon" href="favicon.ico" /></head><body style="font: 14px sans-serif;color: #202122;">');
-			echo("<a href='{$startURL}{$encodedCat}'>{$params['hugeCategory']}</a> is too large for this tool. ");
-			echo("Try using <a href='{$startURL}Special:RandomInCategory/{$encodedCat}'>Special:RandomInCategory/{$params['hugeCategory']}</a> instead.");
-			echo('</body></html>');
+			if ( empty($_GET['debug']) ) { echo($htmlTop); }
+			echo("	<p><a href='{$startURL}{$encodedCat}'>{$params['hugeCategory']}</a> is too large for this tool. ");
+			echo("	Try using <a href='{$startURL}Special:RandomInCategory/{$encodedCat}'>Special:RandomInCategory/{$params['hugeCategory']}</a> instead.</p>");
+			if ( empty($_GET['debug']) ) { echo('</body></html>'); }
 		} else {
 			header("Location: {$startURL}Special:RandomInCategory/{$encodedCat}");
 		}
 	}
 }
+if ( !empty($_GET['debug']) ) { echo('<p><a href="README.html">View documentation</a>.</p></body></html>'); }
 
 function wikiencode($text) {
 	$output = "";
@@ -318,8 +335,8 @@ function getMembers($params, $cont = false) {
 	$context = stream_context_create($params['opts']);
 	$jsonFile = @file_get_contents( $queryURL, false, $context );
 	if ( !empty($_GET['debug']) ) {
-		echo("Query URL: $queryURL<br>");
-		echo("JSON file: $jsonFile<br><br>");
+		echo("<p>Query URL: $queryURL<br>");
+		echo("JSON file: $jsonFile</p>");
 	}
 
 	if ($jsonFile) { // API call executed successfully
@@ -351,8 +368,8 @@ function getMembers($params, $cont = false) {
 		
 		$targetURL = "https://{$params['baseURL']}/wiki/Special:RandomInCategory/{$params['category']}";
 		if ( !empty($_GET['debug']) ) {
-			echo("Error fetching <a href=\"$queryURL\">$queryURL</a>. <a href=\"README.html\">View documentation</a>.<br>");
-			echo("Location: <a href=\"$targetURL\">$targetURL</a><br>");
+			echo("<p>Error fetching <a href=\"$queryURL\">$queryURL</a>.<br>");
+			echo("Location: <a href=\"$targetURL\">$targetURL</a></p>");
 		} else if (count($params['categories']) > 1) {
 			echo("Error fetching data for {$params['category']}. Try using <a href=\"$targetURL\">$targetURL</a> or <a href=\"README.html\">view documentation</a>.<br>");
 		} else {
@@ -389,7 +406,7 @@ function getAssociatedPage($params, $title) {
 	} else {
 		error_log("Error fetching $queryURL.");
 		if ( !empty($_GET['debug']) ) {
-			echo("Error fetching $queryURL.");
+			echo("<p>Error fetching $queryURL.</p>");
 		}
 	}
 	
@@ -421,6 +438,7 @@ function buildPage($params) {
 '<html>
 	<head>
 		<link rel="shortcut icon" type="image/x-icon" href="favicon.ico" />
+		<meta name="application-name" content="' . $params['appVersion'] . '" />
 		<script src="https://tools-static.wmflabs.org/cdnjs/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 		<script>
 			function addCatRow(node, counter) {
@@ -459,7 +477,7 @@ function buildPage($params) {
 	
 	echo(
 "		</div>
-		<form oninput='document.getElementById(\"outputURL\").href = document.getElementById(\"outputURL\").innerHTML = window.location.href.split(/[?#]/)[0] + \"?\" + $(this).serialize();'>
+		<form oninput='document.getElementById(\"outputURL\").href = document.getElementById(\"outputURL\").innerHTML = window.location.href.split(/[?#]/)[0] + \"?\" + $(this).serialize().replaceAll(\"%20\",\"_\");'>
 			<div style='margin-top: 12px;'>
 				<span style='display: block;padding-bottom: 4px;'>
 					<label for='category-input'>
