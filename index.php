@@ -1,7 +1,6 @@
 <?php
 ini_set('memory_limit', '256M');
-$app_version = 'RandomInCategory/20250218';
-ini_set('user_agent', $app_version . ' (https://randomincategory.toolforge.org/; en:User:Ahecht) PHP/' . PHP_VERSION);
+ini_set('user_agent', 'RandomInCategory/20240810 (https://randomincategory.toolforge.org/; en:User:Ahecht) PHP/' . PHP_VERSION);
 
 // Random In Category Tool
 // -----------------------
@@ -38,21 +37,18 @@ $params = array(
 	'categories' => [],
 	'pageLimit' => 100000,
 	'hugeCategory' => FALSE,
-	'appVersion' => $app_version
+	'errorMsg' => ''
 );
 
 // Set up caching
 $context = stream_context_create($params['opts']);
-$redisBaseKey = $params['appVersion'];
-$redisBaseKey .= @file_get_contents('../redis.key', false, $context) ?: 'G6YfmVEhxQdrFLEBFZEXxAppN0jyoYoC';
+$redisBaseKey = @file_get_contents('../redis.key', false, $context) ?: 'G6YfmVEhxQdrFLEBFZEXxAppN0jyoYoC';
 
 // Gather parameters from URL
-foreach ($_GET as $getKey => $getValue) {
+foreach($_GET as $getKey => $getValue) {
 	if ( ( strtolower( substr($getKey, 0, 8) ) == "category" ) or ( strtolower( substr($getKey, 0, 10) ) == "cmcategory" ) ) {
-		foreach (explode('|', $getValue) as $expValue) {
-			if ( $expValue != '' ) {
-				$params['categories'][] = "Category:" . preg_replace('/^Category:/i','',$expValue);
-			}
+		if ( $getValue != '' ) {
+			$params['categories'][] = "Category:" . preg_replace('/^Category:/i','',$getValue);
 		}
 	}
 }
@@ -65,37 +61,47 @@ if ( isset($_GET['returntype']) ) {
 }
 
 //Check that we're only querying wikimedia wikis
-if ( !isset($params['baseURL']) or !preg_match("/^[a-z\-]*\.?(mediawiki|toolforge|wik(i(books|data|[mp]edia|news|quote|source|versity|voyage)|tionary)).org$/i", $params['baseURL']) ) {
-	//if (isset($params['baseURL'])) {error_log("Invalid URL: {$params['baseURL']}. From ".json_encode($_GET));}
+if ( !isset($params['baseURL']) or $params['baseURL'] == '' ) {
 	$params['baseURL'] = 'en.wikipedia.org';
+} elseif ( !preg_match("/^[a-z\-]*\.?(mediawiki|toolforge|wik(i(books|data|[mp]edia|news|quote|source|versity|voyage)|tionary)).org$/i", $params['baseURL']) ) {
+	//if (isset($params['baseURL'])) {error_log("Invalid URL: {$params['baseURL']}. From ".json_encode($_GET));}
+	$params['errorMsg'] = "This tool only works on wikis hosted by <a href='https://www.wikimedia.org/'>Wikimedia</a>. <a href='//{$params['baseURL']}'>{$params['baseURL']}</a> is not a valid Wikimedia wiki.";
+	buildPage($params);
+	exit();
 }
 
 if ( isset($params['query']['cmnamespace']) ) {
-	if ( !preg_match("/^[\d\|\!:;,]*$/", urldecode($params['query']['cmnamespace'])) ) {
-		if ( strtolower(urldecode($params['query']['cmnamespace'])) == 'article' ) {
-			$params['query']['cmnamespace'] = '0';
-		} else {
-			error_log("Invalid namespace: {$params['query']['cmnamespace']}. From ".json_encode($_GET));
-			unset($params['query']['cmnamespace']);
-		}
-	} else {
-		$params['query']['cmnamespace'] = str_replace(
-			array(',', ';', ':', '!', '/'),
-			'|',
-			$params['query']['cmnamespace']
-		);
+	$orig = $params['query']['cmnamespace'];
+	//decode and normalize separators to |
+	$params['query']['cmnamespace'] = str_replace( array(',', ';', ':', '!', '/'), '|', urldecode(urldecode($params['query']['cmnamespace'])) );
+	//substitute "article" with "0"
+	$params['query']['cmnamespace'] = preg_replace( '/article/i', '0', $params['query']['cmnamespace'] );
+	//remove anything that's not a number or separator
+	$params['query']['cmnamespace'] = preg_replace('/[^\|\d]/', '', $params['query']['cmnamespace']);
+	if ( !preg_match("/^\d+(\|\d+)*$/", $params['query']['cmnamespace']) ) { //invalid namespace format
+		error_log("Invalid namespace: {$params['query']['cmnamespace']}  ({$orig}). From ".json_encode($_GET));
+		unset($params['query']['cmnamespace']);
 	}
 }
 
-if ( isset($params['query']['cmtype']) and !preg_match("/^(page|subcat|file)[\d\|\!:]?(page|subcat|file)?[\d\|\!:]?(page|subcat|file)?$/", urldecode($params['query']['cmtype'])) ) {
-	error_log("Invalid type: {$params['query']['cmtype']}. From ".json_encode($_GET));
-	unset($params['query']['cmtype']);
+if ( isset($params['query']['cmtype']) ) {
+	$orig = $params['query']['cmtype'];
+	//decode and normalize separators to |
+	$params['query']['cmtype'] = str_replace( array(',', ';', ':', '!', '/'), '|', urldecode(urldecode($params['query']['cmtype'])) );
+	//remove anything that's not a letter or separator
+	$params['query']['cmtype'] = preg_replace( '/[^a-z\|]/i', '', $params['query']['cmtype'] );
+	if ( !preg_match("/^(page|subcat|file)(\|(page|subcat|file))?(\|(page|subcat|file))?$/", $params['query']['cmtype']) ) {
+		error_log("Invalid type: {$params['query']['cmtype']} ({$orig}). From ".json_encode($_GET));
+		unset($params['query']['cmtype']);
+	}
 }
 
 // Run API queries
-if ( count($params['categories']) == 0 ) { // No categories specified 
+$numCats = count($params['categories']);
+if ( $numCats == 0 ) { // No categories specified 
 	if ( !empty($_GET['debug']) ) { echo("Category list empty.<br>"); }
 	buildPage($params);
+	exit();
 } else { // Category was specified
 	$memberList = array();
 	
@@ -135,8 +141,8 @@ if ( count($params['categories']) == 0 ) { // No categories specified
 				'prop' => 'categoryinfo',
 				'titles' => $params['query']['cmtitle']
 			);
-			$queryURL = 'https://' . $params['baseURL'] . '/w/api.php?' . http_build_query($params['query']);
-			$jsonFile = @file_get_contents( $queryURL, false, $context );
+			$queryURL = 'https://' . $params['baseURL'] . '/w/api.php?' . http_build_query($query);
+			$jsonFile = file_get_contents( $queryURL, false, $context );
 			if ( !empty($_GET['debug']) ) {
 				echo("Query URL: $queryURL<br>");
 				echo("JSON file: $jsonFile<br><br>");
@@ -252,14 +258,35 @@ if ( count($params['categories']) == 0 ) { // No categories specified
 				}
 			}
 			
+			//Categories specified but no pages found. Generate error message.
+			$ct = isset($params['query']['cmtype']) ? $params['query']['cmtype'] : 'item';
+			$ns = isset($params['query']['cmnamespace']) ? "in namespace {$params['query']['cmnamespace']} " : '';
+			
+			$params['errorMsg'] = "There are no {$ct}s {$ns}in the ";
+			
+			foreach($params['categories'] as $catKey => $catName) { //List each category
+				$orOrNot = "";
+				if ($catKey < $numCats - 1) {
+					$orOrNot = "or ";
+				}
+				$dispName = str_replace('_',' ',$catName);
+				$params['errorMsg'] = "{$params['errorMsg']}<a style=\"color: {$params['categoryColor'][$catKey]};text-decoration: none;\" href=\"https://{$params['baseURL']}/wiki/{$catName}\">{$params['categoryName'][$catKey]}</a> {$orOrNot}";
+			}
+			
+			$pluralCats = "y";
+			if ($numCats > 1) {
+				$pluralCats = "ies";
+			}
+			
+			$params['errorMsg'] = "{$params['errorMsg']}categor{$pluralCats} on <a style=\"color: {$params['siteColor']};text-decoration: none;\" href=\"https://{$params['baseURL']}/\">{$params['baseURL']}</a>.";
+			
 			buildPage($params);
 		}
 	} else {
 		$startURL = "https://{$params['baseURL']}/wiki/";
 		$encodedCat = rawurlencode(preg_replace('/(\s|%20)/', '_', $params['hugeCategory']));
-		if ( !empty($_GET['debug']) or (count($params['categories']) > 1) ) {
-			echo("<html><head><link rel='shortcut icon' type='image/x-icon' href='favicon.ico' /><meta name='application-name' content='{$params['appVersion']}' /></head>");
-			echo("<body style='font: 14px sans-serif;color: #202122;'>");
+		if ( !empty($_GET['debug']) or ($numCats > 1) ) {
+			echo('<html><head><link rel="shortcut icon" type="image/x-icon" href="favicon.ico" /></head><body style="font: 14px sans-serif;color: #202122;">');
 			echo("<a href='{$startURL}{$encodedCat}'>{$params['hugeCategory']}</a> is too large for this tool. ");
 			echo("Try using <a href='{$startURL}Special:RandomInCategory/{$encodedCat}'>Special:RandomInCategory/{$params['hugeCategory']}</a> instead.");
 			echo('</body></html>');
@@ -316,7 +343,7 @@ function getMembers($params, $cont = false) {
 		}
 		return $memberList;
 	} else { // API call failed
-		error_log("Error fetching $queryURL.");
+		error_log( "Error fetching $queryURL. ".json_encode($http_response_header) );
 		$params['category'] = null;
 		if ( !empty($_GET['category']) or !empty($_GET['cmcategory']) ) {
 			$params['category'] = rawurlencode(preg_replace('/(\s|%20)/', '_', (!empty($_GET['category']) ? $_GET['category'] : $_GET['cmcategory']) ));
@@ -390,35 +417,34 @@ function setCache($key, $value) {
 }
 
 function buildPage($params) {
-	$script = '<script>
+	echo(
+'<html>
+	<head>
+		<link rel="shortcut icon" type="image/x-icon" href="favicon.ico" />
+		<script src="https://tools-static.wmflabs.org/cdnjs/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+		<script>
 			function addCatRow(node, counter) {
 				$(node).after(\'<input type="text" name="category\' + (counter + 1) + \'" id="category-input\' + (counter + 1) + \'" placeholder="Category name" style="margin-top: 12px;padding: 6px 8px;border: 1px solid #a2a9b1;border-radius: 2px;width: 640px;"><a href="#" id="category-add-\' + (counter + 1) + \'" onClick="addCatRow(this, \' + (counter + 1) + \')"><svg style=\"width: 20px; height: 20px;vertical-align: middle;\"><title>add</title><path fill=\"#36c\" d=\"M11 9V4H9v5H4v2h5v5h2v-5h5V9z\"/></svg></a>\');
 				$("#category-add-" + counter).remove();
 			}
-		</script>';
-	echo(
-"<html>
-	<head>
-		<link rel='shortcut icon' type='image/x-icon' href='favicon.ico' />
-		<meta name='application-name' content='{$params['appVersion']}' />
-		<script src='https://tools-static.wmflabs.org/cdnjs/ajax/libs/jquery/3.6.0/jquery.min.js'></script>
-		{$script}
+		</script>
 	</head>
-	<body style='font: 14px sans-serif;color: #202122;'>
-		<h1 style='font: 2em \"Linux Libertine\",\"Georgia\",\"Times\",serif;color: #000;line-height: 1.3;margin-bottom:7.2px;border-bottom: 1px solid #a2a9b1;display: block;'>Random page in category</h1>
-		<div style='padding: 4px 0px;'>"
+	<body style="font: 14px sans-serif;color: #202122;">
+		<h1 style="font: 2em \'Linux Libertine\',\'Georgia\',\'Times\',serif;color: #000;line-height: 1.3;margin-bottom:7.2px;border-bottom: 1px solid #a2a9b1;display: block;">Random page in category</h1>
+		<div style="padding: 4px 0px;">'
 	);
 	
 	$catSuggest = 'placeholder="Category name"';
 	$numCats = count($params['categories']);
-	if ( $numCats > 0 ) {
-		if ( $numCats == 1 ) {
-			$catSuggest = 'value="' . $params['categoryName'][0] . '"';
+	if ( $numCats == 1 ) {
+		if ( isset($params['categoryName']) && isset($params['categoryName'][0]) ) {
+			$catSuggest = 'value="' . str_replace( 'Category:', '', $params['categoryName'][0] ) . '"';
+		} else {
+			$catSuggest = 'value="' . str_replace( 'Category:', '', reset($params['categories']) ) . '"';
 		}
-		
-		$ct = isset($params['query']['cmtype']) ? $params['query']['cmtype'] : 'item';
-		$ns = isset($params['query']['cmnamespace']) ? "in namespace {$params['query']['cmnamespace']} " : '';
-		
+	}
+	
+	if ( $params['errorMsg'] != "" ) {
 		echo(
 "			<svg style=\"width: 20px; height: 20px;vertical-align: middle;\">
 				<g fill=\"#d33\">
@@ -426,33 +452,14 @@ function buildPage($params) {
 				</g>
 			</svg>
 			<span style=\"color: #d23;font-weight: 700;line-height: 20px;vertical-align: middle;\">
-				There are no {$ct}s {$ns}in the "
-		);
-		
-		foreach($params['categories'] as $catKey => $catName) { //List each category
-			$orOrNot = "";
-			if ($catKey < $numCats - 1) {
-				$orOrNot = "or ";
-			}
-			$dispName = str_replace('_',' ',$catName);
-			echo(
-"				<a style=\"color: {$params['categoryColor'][$catKey]};text-decoration: none;\" href=\"https://{$params['baseURL']}/wiki/{$catName}\">{$params['categoryName'][$catKey]}</a> {$orOrNot}"
-			);
-		}
-		
-		$pluralCats = "y";
-		if ($numCats > 1) {
-			$pluralCats = "ies";
-		}
-		
-		echo(
-"				categor{$pluralCats} on <a style=\"color: {$params['siteColor']};text-decoration: none;\" href=\"https://{$params['baseURL']}/\">{$params['baseURL']}</a>.
+				{$params['errorMsg']}
 			</span>"
 		);
 	}
+	
 	echo(
 "		</div>
-		<form oninput='document.getElementById(\"outputURL\").href = document.getElementById(\"outputURL\").innerHTML = window.location.href.split(/[?#]/)[0] + \"?\" + $(this).serialize().replaceAll(\"%20\",\"_\");'>
+		<form oninput='document.getElementById(\"outputURL\").href = document.getElementById(\"outputURL\").innerHTML = window.location.href.split(/[?#]/)[0] + \"?\" + $(this).serialize();'>
 			<div style='margin-top: 12px;'>
 				<span style='display: block;padding-bottom: 4px;'>
 					<label for='category-input'>
