@@ -9,14 +9,16 @@ ini_set('user_agent', $app_version . ' (https://randomincategory.toolforge.org/;
 // Replacement for 'Special:RandomInCategory' that actually chooses a page randomly. Includes options for filtering results by namespace and type.
 // e.g.: https://RandomInCategory.toolforge.org/?site=en.wikipedia.org&category=AfC_pending_submissions_by_age/0_days_ago&cmnamespace=2|118&cmtype=page&debug=true
 //
-// Set the following rewrite rules to allow accessing via https://tools.wmflabs.org/RandomInCategory/AfC_pending_submissions_by_age/0_days_ago?site=en.wikipedia.org&cmnamespace=2|118&cmtype=page&debug=true
-// or https://RandomInCategory.toolforge.org/AfC_pending_submissions_by_age/0_days_ago?site=en.wikipedia.org&cmnamespace=2|118&cmtype=page&debug=true:
-//url.rewrite-if-not-file += ( "^/[Rr]andom[Ii]n[Cc]ategory/([^\?]+)\?(.*)$" => "/randomincategory/index.php?category=$1&$2" )
-//url.rewrite-if-not-file += ( "^/[Rr]andom[Ii]n[Cc]ategory/([^\?]*)$" => "/randomincategory/index.php?category=$1" )
+// Set the following rewrite rules to allow accessing via a URL such as
+// https://RandomInCategory.toolforge.org/AfC_pending_submissions_by_age/0_days_ago?site=en.wikipedia.org&cmnamespace=2|118&cmtype=page&debug=true:
+//url.rewrite-if-not-file += ( "^/[Rr]andom[Ii]n[Cc]ategory/([^\?]+)\?(.*)$" => "/index.php?category=$1&$2" )
+//url.rewrite-if-not-file += ( "^/[Rr]andom[Ii]n[Cc]ategory/([^\?]*)$" => "/index.php?category=$1" )
 //url.rewrite-if-not-file += ( "^/([^\?]+)\?(.*)$" => "/index.php?category=$1&$2" )
 //url.rewrite-if-not-file += ( "^/([^\?]*)$" => "/index.php?category=$1" )
 //
 //webservice --backend=kubernetes php7.4 start
+
+error_log("Rewritten URL: " . $rewrittenUrl);
 
 // Set defaults
 $params = array(
@@ -477,7 +479,7 @@ function buildPage($params) {
 	
 	echo(
 "		</div>
-		<form oninput='document.getElementById(\"outputURL\").href = document.getElementById(\"outputURL\").innerHTML = window.location.href.split(/[?#]/)[0] + \"?\" + $(this).serialize().replaceAll(\"%20\",\"_\");'>
+		<form oninput='document.getElementById(\"outputURL\").href = document.getElementById(\"outputURL\").innerHTML = window.location.href.split(/(?<!\/)\/(?!\/)/)[0] + \"/?\" + $(this).serialize().replaceAll(\"%20\",\"_\");'>
 			<div style='margin-top: 12px;'>
 				<span style='display: block;padding-bottom: 4px;'>
 					<label for='category-input'>
