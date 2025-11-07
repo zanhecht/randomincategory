@@ -18,8 +18,6 @@ ini_set('user_agent', $app_version . ' (https://randomincategory.toolforge.org/;
 //
 //webservice --backend=kubernetes php7.4 start
 
-error_log("Rewritten URL: " . $rewrittenUrl);
-
 // Set defaults
 $params = array(
 	'query' => array(
